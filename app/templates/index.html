@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Air V7 Agent</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">Air<span> V7 Agent</span></div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" data-page="chat">Chat</button>
+    <button class="nav-tab" data-page="kickoff">Kickoff</button>
+    <button class="nav-tab" data-page="score">Bid Score</button>
+    <button class="nav-tab" data-page="lanes">Lanes & Pricing</button>
+    <button class="nav-tab" data-page="volume">Volume</button>
+    <button class="nav-tab" data-page="analysis">Analysis</button>
+    <button class="nav-tab" data-page="export">Export</button>
+    <button class="nav-tab" data-page="tools">Tools</button>
+  </div>
+  <div class="header-right">
+    <input id="client-name-input" placeholder="Client name..." value="ABC Company"
+      style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 10px;font-size:13px;width:160px">
+    <input id="pr-id-input" placeholder="PR ID..." value="PR-001"
+      style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 10px;font-size:13px;width:90px">
+    <div class="client-badge">Client: <span id="client-display">ABC Company</span></div>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <h4>Bid Score</h4>
+      <div id="sidebar-score" style="color:var(--muted);font-size:12px">Not scored yet</div>
+    </div>
+    <div class="sidebar-section" style="flex:1">
+      <h4>Lanes <span style="color:var(--accent);margin-left:4px" id="lane-count"></span></h4>
+      <div id="lane-list"></div>
+      <button class="btn btn-full btn-sm" style="margin-top:10px" onclick="openLaneModal()">+ Add Lane</button>
+    </div>
+    <div class="sidebar-section">
+      <h4>Financials</h4>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span style="color:var(--muted)">Total NR</span>
+          <span id="fin-total-nr" style="color:var(--green);font-weight:600">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span style="color:var(--muted)">Avg Take Rate</span>
+          <span id="fin-avg-take" style="font-weight:600">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span style="color:var(--muted)">Total CW</span>
+          <span id="fin-total-cw">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span style="color:var(--muted)">Lanes</span>
+          <span id="fin-lanes">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- Chat -->
+    <div id="page-chat" class="page active" style="padding:0">
+      <div class="chat-container">
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-bar">
+          <textarea class="chat-input" id="chat-input" placeholder="Ask about pricing, strategy, rates, financials..." rows="1"></textarea>
+          <button class="chat-send" id="send-btn" onclick="sendChat()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Kickoff -->
+    <div id="page-kickoff" class="page">
+      <div class="page-title">Kickoff Questions</div>
+      <div class="page-subtitle">Capture commercial context and RFP requirements before pricing</div>
+
+      <div class="card">
+        <div class="card-title">Standard Kickoff <span class="badge">Required for all bids</span></div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Client Due Date</label>
+            <input type="date" id="ko-client-due">
+          </div>
+          <div class="form-group">
+            <label>Internal Procurement Due Date</label>
+            <input type="date" id="ko-internal-due">
+          </div>
+          <div class="form-group full">
+            <label>Commercial Context & Account History</label>
+            <textarea id="ko-commercial" placeholder="e.g. Brand new client. We were 10% higher last time. Client is getting poor service from incumbent..."></textarea>
+          </div>
+          <div class="form-group full">
+            <label>Opportunity Strategy & Target Lanes</label>
+            <textarea id="ko-strategy" placeholder="e.g. Target Charter lanes first to get a foot in the door..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Expected # of Rounds</label>
+            <input type="text" id="ko-rounds" placeholder="e.g. 2">
+          </div>
+          <div class="form-group">
+            <label># of Providers in RFP / Incumbents</label>
+            <input type="text" id="ko-providers" placeholder="e.g. 3 providers: DHL, KN, DBS">
+          </div>
+          <div class="form-group">
+            <label>Client-Defined Transit Times?</label>
+            <input type="text" id="ko-transit" placeholder="e.g. Yes, 9 days DTD for Standard">
+          </div>
+          <div class="form-group">
+            <label>Financial Penalties / Non-standard Billing?</label>
+            <input type="text" id="ko-penalties" placeholder="e.g. 5% penalty if OTP <95%">
+          </div>
+          <div class="form-group">
+            <label>Client-Specific Fuel Policy?</label>
+            <input type="text" id="ko-fuel" placeholder="e.g. EIA Platts index, or standard FSC">
+          </div>
+          <div class="form-group">
+            <label>Cargo Density Profile</label>
+            <input type="text" id="ko-density" placeholder="e.g. Assume 1:7, est. 10T/week">
+          </div>
+          <div class="form-group">
+            <label>Accepts PSS?</label>
+            <select id="ko-pss">
+              <option value="">— Select —</option>
+              <option>Yes</option>
+              <option>Yes, with conditions (e.g. Sep–Dec only)</option>
+              <option>No</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Any Routing Requirements?</label>
+            <input type="text" id="ko-routing" placeholder="e.g. Direct landing required for EXP">
+          </div>
+          <div class="form-group full">
+            <label>Special Delivery Requirements</label>
+            <textarea id="ko-delivery" placeholder="e.g. Ships to FBA, specific delivery windows..."></textarea>
+          </div>
+          <div class="form-group full">
+            <label>Internal Pricing Instructions</label>
+            <textarea id="ko-pricing-inst" placeholder="e.g. Go in rock bottom Round 1, winner takes all..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Award Methodology</label>
+            <select id="ko-award">
+              <option value="">— Select —</option>
+              <option>Lane by Lane</option>
+              <option>Regional basis</option>
+              <option>By origin country</option>
+              <option>By destination</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Pricing Assessment Logic</label>
+            <input type="text" id="ko-assessment" placeholder="e.g. DTD only per kg, all surcharges included">
+          </div>
+          <div class="form-group full">
+            <label>What Will Make Us Win?</label>
+            <textarea id="ko-win" placeholder="e.g. Price above anything else, client flexible on transit"></textarea>
+          </div>
+          <div class="form-group full">
+            <label>Other Notes / Assumptions</label>
+            <textarea id="ko-notes" placeholder="Any additional context..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-primary" onclick="saveKickoff()">Save Kickoff Answers</button>
+        <button class="btn" onclick="askAIOnKickoff()">✨ Get AI Strategy Advice</button>
+      </div>
+      <div id="kickoff-ai-advice" style="margin-top:16px"></div>
+    </div>
+
+    <!-- Bid Score -->
+    <div id="page-score" class="page">
+      <div class="page-title">Bid Score Tool</div>
+      <div class="page-subtitle">Assess opportunity quality and win probability</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+        <div>
+          <div class="card">
+            <div class="card-title">Customer Profile <span class="badge">45% weight</span></div>
+            <div id="score-form" class="score-options"></div>
+          </div>
+        </div>
+        <div>
+          <div class="card" id="score-result" style="min-height:100px">
+            <div style="color:var(--muted);font-size:13px">Fill in the scoring criteria and click Calculate</div>
+          </div>
+          <button class="btn btn-primary btn-full" onclick="calculateScore()">Calculate Bid Score</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lanes -->
+    <div id="page-lanes" class="page">
+      <div class="page-title">Lanes & Pricing</div>
+      <div class="page-subtitle">Add trade lanes with full origin, main freight, and destination charges</div>
+
+      <div class="fin-grid">
+        <div class="fin-card">
+          <div class="fin-label">Total Net Revenue</div>
+          <div class="fin-value green" id="fin-total-nr2">—</div>
+        </div>
+        <div class="fin-card">
+          <div class="fin-label">Avg Take Rate</div>
+          <div class="fin-value" id="fin-avg-take2">—</div>
+        </div>
+        <div class="fin-card">
+          <div class="fin-label">Total Chargeable Weight</div>
+          <div class="fin-value" id="fin-total-cw2">—</div>
+        </div>
+        <div class="fin-card">
+          <div class="fin-label">Active Lanes</div>
+          <div class="fin-value" id="fin-lanes2">0</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          Lane Summary
+          <button class="btn btn-sm btn-primary" style="margin-left:auto" onclick="openLaneModal()">+ Add Lane</button>
+        </div>
+        <table class="lanes-table">
+          <thead>
+            <tr>
+              <th>#</th><th>Origin</th><th>Destination</th><th>Service</th>
+              <th>CW (kg)</th><th>Sell/kg</th><th>Cost/kg</th><th>NR/Shipment</th><th>Take Rate</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="lanes-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Volume -->
+    <div id="page-volume" class="page">
+      <div class="page-title">Volume & Consolidation Analysis</div>
+      <div class="page-subtitle">Weekly volume, award assumptions, consolidation, seasonality, weighted average rates</div>
+
+      <!-- Award settings -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Analysis Settings</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Award Assumption %</label>
+            <input type="number" id="vol-award-pct" value="50" min="1" max="100" step="1">
+          </div>
+          <div class="form-group">
+            <label>FTL Consolidation Threshold (kg/week)</label>
+            <input type="number" id="vol-ftl-threshold" value="4000">
+          </div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="runVolumeAnalysis()">Run Volume Analysis</button>
+      </div>
+
+      <!-- Volume by Lane -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Volume by Lane <span class="badge" id="vol-consolidation-badge"></span></div>
+        <div id="volume-table-container">
+          <div style="color:var(--muted);font-size:13px">Add lanes first, then run analysis.</div>
+        </div>
+      </div>
+
+      <!-- Seasonality -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Seasonality Distribution</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Optional: adjust monthly distribution weights (will be normalized). Leave blank for default air freight seasonality profile.</div>
+        <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:8px;margin-bottom:12px">
+          <div class="form-group" id="season-inputs"></div>
+        </div>
+        <button class="btn btn-primary" onclick="runSeasonality()">Analyze Seasonality</button>
+        <div id="seasonality-result" style="margin-top:14px"></div>
+      </div>
+
+      <!-- Weighted Average -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Weighted Average Sell Rate</div>
+        <button class="btn btn-primary" onclick="runWeightedAverage()">Calculate Weighted Average</button>
+        <div id="weighted-avg-result" style="margin-top:14px"></div>
+      </div>
+
+      <!-- Milk Run -->
+      <div class="card">
+        <div class="card-title">Milk Run Assessment <span class="badge">LAX / ORD destinations</span></div>
+        <button class="btn btn-primary" onclick="runMilkRun()">Assess Milk Run Potential</button>
+        <div id="milk-run-result" style="margin-top:14px"></div>
+      </div>
+    </div>
+
+    <!-- Analysis -->
+    <div id="page-analysis" class="page">
+      <div class="page-title">Bid Analysis</div>
+      <div class="page-subtitle">AI-powered comprehensive bid assessment</div>
+      <button class="btn btn-primary" id="analyze-btn" onclick="runAnalysis()">🔍 Run Full Bid Analysis</button>
+      <div id="analysis-result" style="margin-top:20px"></div>
+    </div>
+
+    <!-- Export -->
+    <div id="page-export" class="page">
+      <div class="page-title">Export</div>
+      <div class="page-subtitle">Generate customer-facing quotes and populate the Air V7 Excel template</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="card">
+          <div class="card-title">Customer Quote Preview</div>
+          <button class="btn btn-primary" onclick="exportQuote()">Generate Quote Preview</button>
+          <div id="quote-preview" style="margin-top:16px"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Air V7 Excel Export</div>
+          <p style="color:var(--muted);font-size:13px;margin-bottom:14px">Populates the official Air V7 template with all lane data entered in this session.</p>
+          <button class="btn btn-primary" id="excel-btn" onclick="exportExcel()">⬇ Export Air V7 Excel</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">IPS Upload CSV <span class="badge">Flexport Internal System</span></div>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:14px">Generates a CSV in IPS upload format with all 104 fields required for Flexport's internal pricing system.</p>
+        <button class="btn btn-primary" id="ips-btn" onclick="exportIPS()">⬇ Export IPS CSV</button>
+      </div>
+    </div>
+
+    <!-- Tools -->
+    <div id="page-tools" class="page">
+      <div class="page-title">Tools</div>
+      <div class="page-subtitle">Utility calculators for air freight</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card">
+          <div class="card-title">Chargeable Weight Calculator</div>
+          <div class="form-grid-3" style="margin-bottom:14px">
+            <div class="form-group">
+              <label>Actual Weight (kg)</label>
+              <input type="number" id="d-actual" placeholder="e.g. 500">
+            </div>
+            <div class="form-group">
+              <label>Volume (CBM)</label>
+              <input type="number" id="d-cbm" placeholder="e.g. 3.5" step="0.01">
+            </div>
+            <div class="form-group">
+              <label>Dim Ratio (1:X)</label>
+              <input type="number" id="d-ratio" value="6">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="calcDensity()">Calculate</button>
+          <div id="density-result"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Quick Reference</div>
+          <div style="font-size:12px;color:var(--muted);line-height:2">
+            <div><strong style="color:var(--text)">Volumetric Weight</strong> = CBM × 166.67 (1:6)</div>
+            <div><strong style="color:var(--text)">Weight Breaks</strong>: Min, 45, 100, 300, 500, 1000, 2000 kg</div>
+            <div><strong style="color:var(--text)">Take Rate</strong> = (Sell - Cost) / Sell × 100%</div>
+            <div><strong style="color:var(--text)">ENR</strong> = NR per shipment × expected shipments</div>
+            <div><strong style="color:var(--text)">Consolidation</strong>: Weekly CW vs FTL threshold (~4000kg)</div>
+            <div><strong style="color:var(--text)">PSS</strong>: Peak Season Surcharge — typically Sep–Dec</div>
+            <div><strong style="color:var(--text)">AMS</strong>: US-bound only | <strong style="color:var(--text)">ENS</strong>: EU-bound only</div>
+            <div><strong style="color:var(--text)">ACAS</strong>: Air Cargo Advanced Screening (US inbound)</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+        <!-- FX Converter -->
+        <div class="card">
+          <div class="card-title">FX Converter <span class="badge">Finance-approved rates</span></div>
+          <div class="form-grid-3" style="margin-bottom:12px">
+            <div class="form-group">
+              <label>Amount</label>
+              <input type="number" id="fx-amount" placeholder="e.g. 1000" step="0.01">
+            </div>
+            <div class="form-group">
+              <label>From</label>
+              <select id="fx-from">
+                <option>USD</option><option>CNY</option><option>EUR</option><option>GBP</option>
+                <option>HKD</option><option>CAD</option><option>AUD</option><option>JPY</option>
+                <option>SGD</option><option>MYR</option><option>IDR</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>To</label>
+              <select id="fx-to">
+                <option>USD</option><option>CNY</option><option>EUR</option><option>GBP</option>
+                <option>HKD</option><option>CAD</option><option>AUD</option><option>JPY</option>
+                <option>SGD</option><option>MYR</option><option>IDR</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="convertFX()">Convert</button>
+          <div id="fx-result" style="margin-top:12px"></div>
+          <div style="margin-top:14px">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Key rates to USD (as of 2026-02-17)</div>
+            <div id="fx-rates-table"></div>
+          </div>
+        </div>
+
+        <!-- Focus Lanes -->
+        <div class="card">
+          <div class="card-title">Focus Lane Lookup <span class="badge">252 lanes</span></div>
+          <div class="form-grid" style="margin-bottom:12px">
+            <div class="form-group">
+              <label>Origin Airport (IATA)</label>
+              <input id="fl-origin" placeholder="e.g. PVG" maxlength="3" style="text-transform:uppercase">
+            </div>
+            <div class="form-group">
+              <label>Destination Airport (IATA)</label>
+              <input id="fl-dest" placeholder="e.g. LAX" maxlength="3" style="text-transform:uppercase">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="checkFocusLane()">Check Focus Lane</button>
+          <div id="focus-lane-result" style="margin-top:12px"></div>
+          <div style="margin-top:14px">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Ownership lookup</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Origin Country (ISO)</label>
+                <input id="own-origin" placeholder="e.g. CN" maxlength="2" style="text-transform:uppercase">
+              </div>
+              <div class="form-group">
+                <label>Dest Country (ISO)</label>
+                <input id="own-dest" placeholder="e.g. US" maxlength="2" style="text-transform:uppercase">
+              </div>
+            </div>
+            <button class="btn btn-sm" style="margin-top:8px" onclick="checkOwnership()">Get Owners</button>
+            <div id="ownership-result" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- Lane Modal -->
+<div id="lane-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;width:820px;max-height:90vh;overflow-y:auto;padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h3 id="modal-title" style="font-size:16px">Add New Lane</h3>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" id="suggest-btn" onclick="suggestRates()">✨ AI Suggest Rates</button>
+        <button class="btn btn-sm" onclick="closeLaneModal()">✕ Close</button>
+      </div>
+    </div>
+
+    <div id="rate-suggestion" style="margin-bottom:14px"></div>
+
+    <!-- Route -->
+    <div style="margin-bottom:14px;font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px">Route & Service</div>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-group"><label>Origin Country</label><input id="lane-origin_country" placeholder="e.g. CN"></div>
+      <div class="form-group"><label>Origin City</label><input id="lane-origin_city" placeholder="e.g. Shanghai"></div>
+      <div class="form-group"><label>Origin Airport (IATA)</label><input id="lane-origin_airport" placeholder="e.g. PVG"></div>
+      <div class="form-group"><label>Destination Country</label><input id="lane-destination_country" placeholder="e.g. US"></div>
+      <div class="form-group"><label>Destination City</label><input id="lane-destination_city" placeholder="e.g. Los Angeles"></div>
+      <div class="form-group"><label>Destination Airport (IATA)</label><input id="lane-destination_airport" placeholder="e.g. LAX"></div>
+      <div class="form-group">
+        <label>Service Tier</label>
+        <select id="lane-service_tier">
+          <option value="">— Select —</option>
+          <option>STD</option><option>EXP</option><option>DEF</option><option>CHR</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Incoterms</label>
+        <select id="lane-incoterms">
+          <option value="">— Select —</option>
+          <option>EXW</option><option>FCA</option><option>FOB</option><option>CIF</option><option>DAP</option><option>DDP</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Effective Date</label><input type="date" id="lane-effective_date"></div>
+      <div class="form-group"><label>Expiration Date</label><input type="date" id="lane-expiration_date"></div>
+    </div>
+
+    <!-- Shipment Info -->
+    <div style="margin-bottom:14px;font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px">Shipment Information</div>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-group"><label>Total Shipments / Year</label><input type="number" id="lane-total_shipments"></div>
+      <div class="form-group"><label>Chargeable Weight (kg/year)</label><input type="number" id="lane-chargeable_weight_kg"></div>
+      <div class="form-group"><label>Avg Shipment Size (kg)</label><input type="number" id="lane-avg_shipment_kg"></div>
+      <div class="form-group"><!-- spacer --></div>
+    </div>
+
+    <!-- Origin Charges -->
+    <div style="margin-bottom:14px;font-size:12px;color:var(--yellow);text-transform:uppercase;letter-spacing:.5px">Origin Charges</div>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-group"><label>Currency</label>
+        <select id="lane-origin_currency"><option>USD</option><option>EUR</option><option>CNY</option><option>HKD</option><option>GBP</option></select>
+      </div>
+      <div class="form-group"><label>Pickup Min (flat fee)</label><input type="number" id="lane-pickup_min" step="0.01"></div>
+      <div class="form-group"><label>Pickup per kg (+1000kg)</label><input type="number" id="lane-pickup_kg_1000" step="0.01"></div>
+      <div class="form-group"><label>Origin THC (per kg)</label><input type="number" id="lane-origin_thc" step="0.01"></div>
+      <div class="form-group"><label>Screening (per kg)</label><input type="number" id="lane-screening" step="0.01"></div>
+      <div class="form-group"><label>Doc Fee (per HAWB)</label><input type="number" id="lane-doc_fee" step="0.01"></div>
+      <div class="form-group"><label>Export Customs (per HAWB)</label><input type="number" id="lane-export_customs" step="0.01"></div>
+    </div>
+
+    <!-- Main Freight -->
+    <div style="margin-bottom:14px;font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px">Main Freight (Airport to Airport)</div>
+    <div class="form-grid" style="margin-bottom:10px">
+      <div class="form-group"><label>Currency</label>
+        <select id="lane-main_currency"><option>USD</option><option>EUR</option><option>CNY</option><option>HKD</option></select>
+      </div>
+      <div class="form-group"><label>Airline / Carrier</label><input id="lane-airline" placeholder="e.g. CX, CA, EK"></div>
+      <div class="form-group"><label>Routing</label><input id="lane-routing" placeholder="e.g. PVG-LAX direct"></div>
+      <div class="form-group"><label>Flights/Week</label><input type="number" id="lane-flights_per_week"></div>
+      <div class="form-group"><label>Transit Time Min (days)</label><input type="number" id="lane-transit_min"></div>
+      <div class="form-group"><label>Transit Time Max (days)</label><input type="number" id="lane-transit_max"></div>
+    </div>
+    <!-- Weight Breaks -->
+    <div style="margin-bottom:8px;font-size:11px;color:var(--muted)">BUY rates per kg by weight break</div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:10px">
+      <div class="form-group"><label>Min</label><input type="number" id="lane-buy_rate_min" step="0.001"></div>
+      <div class="form-group"><label>+45kg</label><input type="number" id="lane-buy_rate_45" step="0.001"></div>
+      <div class="form-group"><label>+100kg</label><input type="number" id="lane-buy_rate_100" step="0.001"></div>
+      <div class="form-group"><label>+300kg</label><input type="number" id="lane-buy_rate_300" step="0.001"></div>
+      <div class="form-group"><label>+500kg</label><input type="number" id="lane-buy_rate_500" step="0.001"></div>
+      <div class="form-group"><label>+1000kg</label><input type="number" id="lane-buy_rate_per_kg" step="0.001"></div>
+      <div class="form-group"><label>+2000kg</label><input type="number" id="lane-buy_rate_2000" step="0.001"></div>
+    </div>
+    <div style="margin-bottom:8px;font-size:11px;color:var(--muted)">SELL rates per kg by weight break</div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:10px">
+      <div class="form-group"><label>Min</label><input type="number" id="lane-sell_rate_min" step="0.001"></div>
+      <div class="form-group"><label>+45kg</label><input type="number" id="lane-sell_rate_45" step="0.001"></div>
+      <div class="form-group"><label>+100kg</label><input type="number" id="lane-sell_rate_100" step="0.001"></div>
+      <div class="form-group"><label>+300kg</label><input type="number" id="lane-sell_rate_300" step="0.001"></div>
+      <div class="form-group"><label>+500kg</label><input type="number" id="lane-sell_rate_500" step="0.001"></div>
+      <div class="form-group"><label>+1000kg</label><input type="number" id="lane-sell_rate_per_kg" step="0.001"></div>
+      <div class="form-group"><label>+2000kg</label><input type="number" id="lane-sell_rate_2000" step="0.001"></div>
+    </div>
+    <!-- Surcharges & Markups -->
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-group"><label>Fuel Surcharge FSC (per kg)</label><input type="number" id="lane-fuel_surcharge" step="0.01"></div>
+      <div class="form-group"><label>Security SSC (per kg)</label><input type="number" id="lane-security_charge" step="0.01"></div>
+      <div class="form-group"><label>AMS/ENS (per HAWB)</label><input type="number" id="lane-ams_ens" step="0.01"></div>
+      <div class="form-group"><label>ACAS (per HAWB)</label><input type="number" id="lane-acas" step="0.01"></div>
+      <div class="form-group"><label>PSS (per kg)</label><input type="number" id="lane-pss" step="0.01"></div>
+      <div class="form-group"><label>PSS Effective</label><input type="date" id="lane-pss_effective"></div>
+      <div class="form-group"><label>PSS Expiration</label><input type="date" id="lane-pss_expiration"></div>
+      <div class="form-group"><label>Air Base Markup (per kg)</label><input type="number" id="lane-air_base_markup" step="0.001"></div>
+    </div>
+
+    <!-- Destination Charges -->
+    <div style="margin-bottom:14px;font-size:12px;color:var(--green);text-transform:uppercase;letter-spacing:.5px">Destination Charges</div>
+    <div class="form-grid" style="margin-bottom:20px">
+      <div class="form-group"><label>Currency</label>
+        <select id="lane-dest_currency"><option>USD</option><option>EUR</option><option>GBP</option><option>AUD</option></select>
+      </div>
+      <div class="form-group"><label>Delivery Min (flat fee)</label><input type="number" id="lane-delivery_min" step="0.01"></div>
+      <div class="form-group"><label>Delivery per kg (+1000kg)</label><input type="number" id="lane-delivery_kg_1000" step="0.01"></div>
+      <div class="form-group"><label>Dest THC (per kg)</label><input type="number" id="lane-dest_thc" step="0.01"></div>
+      <div class="form-group"><label>Import Service Charge</label><input type="number" id="lane-import_service" step="0.01"></div>
+      <div class="form-group"><label>Import Customs (per HAWB)</label><input type="number" id="lane-import_customs" step="0.01"></div>
+      <div class="form-group"><label>Doc Turnover (per HAWB)</label><input type="number" id="lane-doc_turnover" step="0.01"></div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn" onclick="closeLaneModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveLane()">Save Lane</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
