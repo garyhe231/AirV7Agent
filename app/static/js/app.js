@@ -194,7 +194,15 @@ function openLaneModal(index = null) {
     const el = document.getElementById('lane-' + f);
     if (el) el.value = lane[f] !== undefined ? lane[f] : '';
   });
+  // Reset QA panel on open
+  const qaPanel = document.getElementById('rate-qa-panel');
+  if (qaPanel) qaPanel.style.display = 'none';
+  const qaResults = document.getElementById('rate-qa-results');
+  if (qaResults) qaResults.innerHTML = '';
+  const ccyMsg = document.getElementById('currency-autofill-msg');
+  if (ccyMsg) ccyMsg.textContent = '';
   modal.style.display = 'flex';
+  attachModalQATrigger();
 }
 
 function closeLaneModal() {
@@ -684,6 +692,284 @@ async function askAIOnKickoff() {
   } finally {
     btn.textContent = '✨ Get AI Strategy Advice'; btn.disabled = false;
   }
+}
+
+// ─── Shipment Data Upload ─────────────────────────────────────────────────────
+async function uploadShipmentData() {
+  const fileInput = document.getElementById('shipment-file');
+  if (!fileInput.files.length) { alert('Select a CSV file first.'); return; }
+  const file = fileInput.files[0];
+  const csvText = await file.text();
+  const awardPct = parseFloat(document.getElementById('sd-award-pct').value) / 100 || 0.5;
+  const weeks = parseInt(document.getElementById('sd-weeks').value) || 52;
+  const ftl = parseFloat(document.getElementById('sd-ftl').value) || 4000;
+
+  const statusEl = document.getElementById('shipment-upload-status');
+  statusEl.textContent = 'Analyzing...';
+  statusEl.style.color = 'var(--muted)';
+
+  try {
+    const res = await fetch('/api/shipment/upload', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csv_text: csvText, award_pct: awardPct, weeks, ftl_threshold: ftl }),
+    });
+    const data = await res.json();
+    if (data.error) { statusEl.textContent = data.error; statusEl.style.color = 'var(--red)'; return; }
+
+    statusEl.textContent = `Parsed ${data.total_shipments} shipments successfully.`;
+    statusEl.style.color = 'var(--green)';
+    document.getElementById('sd-consolidation-section').style.display = 'block';
+    renderConsolidation(data.consolidation);
+    renderDensity(data.density);
+    renderShipmentSeasonality(data.seasonality);
+    renderWeightBreakDist(data.weighted_average);
+  } catch (e) {
+    statusEl.textContent = 'Upload failed: ' + e.message;
+    statusEl.style.color = 'var(--red)';
+  }
+}
+
+async function downloadShipmentTemplate() {
+  const res = await fetch('/api/shipment/template');
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = 'shipment_data_template.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function renderConsolidation(data) {
+  const badge = document.getElementById('sd-con-badge');
+  const consolidated = data.main_freight.filter(r => r.consolidation === 'Yes').length;
+  badge.textContent = `${consolidated}/${data.main_freight.length} lanes can consolidate`;
+
+  let html = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+    Total shipments: <strong style="color:var(--text)">${data.total_shipments}</strong> &nbsp;|&nbsp;
+    Total CW: <strong style="color:var(--text)">${(data.total_cw_kg||0).toLocaleString()} kg</strong> &nbsp;|&nbsp;
+    Award: <strong style="color:var(--text)">${(data.settings.award_pct*100).toFixed(0)}%</strong> &nbsp;|&nbsp;
+    FTL threshold: <strong style="color:var(--text)">${data.settings.ftl_threshold_kg.toLocaleString()} kg/week</strong>
+  </div>`;
+
+  html += `<table class="lanes-table"><thead><tr>
+    <th>Port Pair</th><th>Total CW (kg)</th><th>Weekly CW</th><th>Awarded Weekly</th><th>FTL Util %</th><th>Consolidation</th>
+  </tr></thead><tbody>`;
+  for (const row of data.main_freight) {
+    const consColor = row.consolidation === 'Yes' ? 'var(--green)' : 'var(--muted)';
+    html += `<tr>
+      <td>${row.port_pair}</td>
+      <td>${(row.total_cw_kg||0).toLocaleString()}</td>
+      <td>${row.weekly_cw_kg.toLocaleString()}</td>
+      <td>${row.awarded_weekly_kg.toLocaleString()}</td>
+      <td>${row.ftl_utilization_pct}%</td>
+      <td style="color:${consColor};font-weight:600">${row.consolidation}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById('sd-consolidation-table').innerHTML = html;
+}
+
+function renderDensity(data) {
+  if (!data.by_lane || !data.by_lane.length) {
+    document.getElementById('sd-density-table').innerHTML = '<div style="color:var(--muted)">No dimension data available.</div>';
+    return;
+  }
+  const buckets = ['1:3 and below','1:4','1:5','1:6','1:7','1:8','1:9+'];
+  let html = `<table class="lanes-table"><thead><tr>
+    <th>Port Pair</th><th>Shipments</th><th>Dominant</th>`;
+  for (const b of buckets) html += `<th style="font-size:11px">${b}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const row of data.by_lane) {
+    html += `<tr>
+      <td>${row.port_pair}</td>
+      <td>${row.total_shipments}</td>
+      <td style="color:var(--accent);font-weight:600">${row.dominant_bucket} (${row.dominant_pct}%)</td>`;
+    for (const b of buckets) {
+      const pct = row.density_profile[b] || 0;
+      const intensity = Math.min(pct / 50, 1);
+      const bg = pct > 0 ? `rgba(100,160,255,${0.1 + intensity*0.5})` : 'transparent';
+      html += `<td style="background:${bg};font-size:12px">${pct > 0 ? pct+'%' : ''}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('sd-density-table').innerHTML = html;
+
+  // Overall density
+  if (data.overall && Object.keys(data.overall).length) {
+    let overallHtml = `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Overall density profile (${data.total_shipments_with_dims} shipments with dimensions):</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">`;
+    for (const [label, pct] of Object.entries(data.overall)) {
+      if (pct > 0) {
+        const isNeutral = label === '1:6';
+        const isDense = ['1:3 and below','1:4','1:5'].includes(label);
+        const color = isDense ? 'var(--green)' : isNeutral ? 'var(--yellow)' : 'var(--muted)';
+        overallHtml += `<div style="padding:4px 10px;border-radius:4px;background:var(--surface2);border:1px solid var(--border);font-size:12px">
+          <span style="color:${color};font-weight:600">${label}</span> <span style="color:var(--text)">${pct}%</span>
+        </div>`;
+      }
+    }
+    overallHtml += '</div>';
+    document.getElementById('sd-density-overall').innerHTML = overallHtml;
+  }
+}
+
+function renderShipmentSeasonality(data) {
+  if (!data.monthly || !data.monthly.length) return;
+  const maxPct = Math.max(...data.monthly.map(m => m.pct));
+  let html = '<div style="display:flex;gap:6px;align-items:flex-end;height:130px;margin-bottom:10px">';
+  for (const m of data.monthly) {
+    const h = maxPct > 0 ? Math.round((m.pct / maxPct) * 100) : 0;
+    const isPeak = m.is_peak;
+    const isPss = ['Sep','Oct','Nov','Dec'].includes(m.month);
+    const barColor = isPeak ? 'var(--accent)' : isPss ? 'var(--yellow)' : 'var(--surface2)';
+    html += `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+      <div style="font-size:10px;color:var(--muted)">${m.pct.toFixed(1)}%</div>
+      <div style="width:100%;height:${h}px;background:${barColor};border-radius:3px 3px 0 0;border:1px solid var(--border);min-height:4px"></div>
+      <div style="font-size:10px;color:${isPeak ? 'var(--accent)' : 'var(--muted)'}">${m.month}</div>
+    </div>`;
+  }
+  html += `</div>
+  <div style="font-size:12px;color:var(--muted)">
+    Peak months: <strong style="color:var(--accent)">${data.peak_months.join(', ') || 'None'}</strong> &nbsp;|&nbsp;
+    PSS period (Sep–Dec): <strong style="color:var(--yellow)">${data.pss_volume_pct}% of volume</strong> &nbsp;|&nbsp;
+    Total CW: <strong style="color:var(--text)">${(data.total_cw_kg||0).toLocaleString()} kg</strong>
+  </div>`;
+  document.getElementById('sd-seasonality-chart').innerHTML = html;
+}
+
+function renderWeightBreakDist(data) {
+  if (!data.by_lane || !data.by_lane.length) return;
+  const breaks = ['Min (<45kg)','+45kg','+100kg','+300kg','+500kg','+1000kg','+2000kg'];
+  let html = `<table class="lanes-table"><thead><tr>
+    <th>Port Pair</th><th>Shipments</th><th>Avg CW</th><th>Dominant Break</th>`;
+  for (const b of breaks) html += `<th style="font-size:11px">${b}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const row of data.by_lane) {
+    html += `<tr>
+      <td>${row.port_pair}</td>
+      <td>${row.total_shipments}</td>
+      <td>${row.avg_shipment_kg} kg</td>
+      <td style="color:var(--accent);font-weight:600">${row.dominant_break} (${row.dominant_break_pct}%)</td>`;
+    for (const b of breaks) {
+      const info = row.break_distribution[b] || {pct:0,count:0};
+      const intensity = Math.min(info.pct / 60, 1);
+      const bg = info.pct > 0 ? `rgba(100,200,120,${0.1 + intensity*0.5})` : 'transparent';
+      html += `<td style="background:${bg};font-size:12px">${info.pct > 0 ? info.pct+'%' : ''}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('sd-weighted-avg-table').innerHTML = html;
+}
+
+// ─── Rate QA ──────────────────────────────────────────────────────────────────
+async function runLaneQA() {
+  // Gather current modal values
+  const fields = ['origin_country','origin_city','origin_airport','destination_country','destination_city',
+    'destination_airport','service_tier','effective_date','expiration_date',
+    'buy_rate_min','buy_rate_45','buy_rate_100','buy_rate_300','buy_rate_500','buy_rate_per_kg','buy_rate_2000',
+    'sell_rate_min','sell_rate_45','sell_rate_100','sell_rate_300','sell_rate_500','sell_rate_per_kg','sell_rate_2000',
+    'pickup_min','pickup_kg_100','pickup_kg_500','pickup_kg_1000','pickup_kg_2000',
+    'delivery_min','delivery_kg_100','delivery_kg_500','delivery_kg_1000','delivery_kg_2000'];
+
+  const lane = {};
+  fields.forEach(f => {
+    const el = document.getElementById('lane-' + f);
+    if (el && el.value !== '') lane[f] = el.value;
+  });
+
+  const res = await fetch('/api/lanes/qa', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(lane),
+  });
+  const data = await res.json();
+  renderQAResults(data);
+}
+
+function renderQAResults(data) {
+  const panel = document.getElementById('rate-qa-panel');
+  const results = document.getElementById('rate-qa-results');
+  panel.style.display = 'block';
+
+  if (!data.violations || data.violations.length === 0) {
+    panel.style.borderColor = 'var(--green)';
+    results.innerHTML = '<div style="color:var(--green);font-weight:600">All rate checks passed</div>';
+    return;
+  }
+
+  panel.style.borderColor = data.error_count > 0 ? '#c0392b' : 'var(--yellow)';
+  let html = '';
+  for (const v of data.violations) {
+    const isError = v.severity === 'error';
+    const color = isError ? '#e74c3c' : 'var(--yellow)';
+    const bg = isError ? 'rgba(231,76,60,0.1)' : 'rgba(241,196,15,0.1)';
+    html += `<div style="padding:6px 10px;border-radius:5px;background:${bg};margin-bottom:6px;font-size:12px">
+      <span style="color:${color};font-weight:700">${isError ? 'ERROR' : 'WARN'}</span>
+      <span style="color:var(--text);margin-left:8px">${escHtml(v.message)}</span>
+    </div>`;
+  }
+  if (data.error_count > 0) {
+    html = `<div style="font-size:12px;margin-bottom:8px;color:#e74c3c;font-weight:600">${data.error_count} error(s), ${data.warning_count} warning(s) — rates cannot be saved with errors</div>` + html;
+  } else {
+    html = `<div style="font-size:12px;margin-bottom:8px;color:var(--yellow)">${data.warning_count} warning(s) — review before finalizing</div>` + html;
+  }
+  results.innerHTML = html;
+}
+
+// ─── Currency Auto-fill ───────────────────────────────────────────────────────
+async function autofillCurrencies() {
+  const originCountry = document.getElementById('lane-origin_country')?.value?.trim();
+  const destCountry = document.getElementById('lane-destination_country')?.value?.trim();
+  if (!originCountry && !destCountry) {
+    document.getElementById('currency-autofill-msg').textContent = 'Enter origin/destination country codes first.';
+    return;
+  }
+
+  const res = await fetch('/api/currency/suggest', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ origin_country: originCountry, destination_country: destCountry }),
+  });
+  const data = await res.json();
+
+  const originCcyEl = document.getElementById('lane-origin_currency');
+  const mainCcyEl = document.getElementById('lane-main_currency');
+  const destCcyEl = document.getElementById('lane-dest_currency');
+
+  if (originCcyEl) setSelectValue(originCcyEl, data.origin_currency);
+  if (mainCcyEl) setSelectValue(mainCcyEl, data.main_currency);
+  if (destCcyEl) setSelectValue(destCcyEl, data.dest_currency);
+
+  document.getElementById('currency-autofill-msg').textContent = data.note;
+}
+
+function setSelectValue(selectEl, value) {
+  // Try to select existing option, otherwise add it
+  const opts = Array.from(selectEl.options).map(o => o.value);
+  if (opts.includes(value)) {
+    selectEl.value = value;
+  } else {
+    const opt = document.createElement('option');
+    opt.value = value; opt.textContent = value;
+    selectEl.appendChild(opt);
+    selectEl.value = value;
+  }
+}
+
+// Trigger QA check whenever a rate field changes in the modal
+function attachModalQATrigger() {
+  const rateFields = ['buy_rate_min','buy_rate_45','buy_rate_100','buy_rate_300','buy_rate_500','buy_rate_per_kg','buy_rate_2000',
+    'sell_rate_min','sell_rate_45','sell_rate_100','sell_rate_300','sell_rate_500','sell_rate_per_kg','sell_rate_2000'];
+  rateFields.forEach(f => {
+    const el = document.getElementById('lane-' + f);
+    if (el) el.addEventListener('change', () => {
+      // Only auto-run QA if panel is already visible (after first manual check)
+      if (document.getElementById('rate-qa-panel').style.display !== 'none') {
+        runLaneQA();
+      }
+    });
+  });
 }
 
 // ─── Init ────────────────────────────────────────────────────────────────────

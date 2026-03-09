@@ -14,6 +14,9 @@ from app.services.fx import convert_to_usd, convert, get_all_rates, get_supporte
 from app.services.volume import analyze_volume, analyze_seasonality, compute_weighted_average_rate, milk_run_assessment
 from app.services.reference import is_focus_lane, get_lane_owners, FOCUS_LANES, OWNERSHIP
 from app.services.ips_export import generate_ips_csv
+from app.services.shipment_data import process_shipment_data, get_sample_csv_template
+from app.services.rate_qa import validate_lane_rates, validate_all_lanes
+from app.services.currency_map import get_lane_currencies, get_currency_for_country
 
 router = APIRouter(prefix="/api")
 
@@ -165,6 +168,63 @@ async def lane_owners(payload: Dict[str, Any]):
     origin = payload.get("origin_country", "")
     dest = payload.get("destination_country", "")
     return get_lane_owners(origin, dest)
+
+
+# ─── Shipment Data Upload ─────────────────────────────────────────────────────
+@router.post("/shipment/upload")
+async def shipment_upload(payload: Dict[str, Any]):
+    """Process uploaded CSV shipment data and generate all 4 analytics."""
+    csv_text = payload.get("csv_text", "")
+    award_pct = payload.get("award_pct", 0.5)
+    weeks = payload.get("weeks", 52)
+    ftl_threshold = payload.get("ftl_threshold", 4000)
+    if not csv_text:
+        raise HTTPException(status_code=400, detail="csv_text is required")
+    result = process_shipment_data(csv_text, award_pct, weeks, ftl_threshold)
+    return result
+
+
+@router.get("/shipment/template")
+async def shipment_template():
+    """Return a sample CSV template with headers and example rows."""
+    template = get_sample_csv_template()
+    return Response(
+        content=template,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=shipment_data_template.csv"},
+    )
+
+
+# ─── Rate QA ──────────────────────────────────────────────────────────────────
+@router.post("/lanes/qa")
+async def lane_qa(lane: Dict[str, Any]):
+    """Validate a single lane's rates and return violations."""
+    return validate_lane_rates(lane)
+
+
+@router.post("/lanes/qa/all")
+async def lanes_qa_all(payload: Dict[str, Any]):
+    """Validate all lanes and return summary with per-lane violations."""
+    lanes = payload.get("lanes", [])
+    return validate_all_lanes(lanes)
+
+
+# ─── Currency Auto-populate ───────────────────────────────────────────────────
+@router.post("/currency/suggest")
+async def currency_suggest(payload: Dict[str, Any]):
+    """Suggest origin, main, and destination currencies for a lane."""
+    origin = payload.get("origin_country", "")
+    dest = payload.get("destination_country", "")
+    return get_lane_currencies(origin, dest)
+
+
+@router.get("/currency/for-country/{country_code}")
+async def currency_for_country(country_code: str):
+    """Get the primary currency for a country code."""
+    ccy = get_currency_for_country(country_code)
+    if not ccy:
+        raise HTTPException(status_code=404, detail=f"No currency mapping for {country_code}")
+    return {"country_code": country_code.upper(), "currency": ccy}
 
 
 # ─── IPS Export ───────────────────────────────────────────────────────────────

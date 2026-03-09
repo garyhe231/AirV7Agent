@@ -17,6 +17,7 @@
     <button class="nav-tab" data-page="score">Bid Score</button>
     <button class="nav-tab" data-page="lanes">Lanes & Pricing</button>
     <button class="nav-tab" data-page="volume">Volume</button>
+    <button class="nav-tab" data-page="shipment">Shipment Data</button>
     <button class="nav-tab" data-page="analysis">Analysis</button>
     <button class="nav-tab" data-page="export">Export</button>
     <button class="nav-tab" data-page="tools">Tools</button>
@@ -303,6 +304,75 @@
       </div>
     </div>
 
+    <!-- Shipment Data -->
+    <div id="page-shipment" class="page">
+      <div class="page-title">Shipment Level Data</div>
+      <div class="page-subtitle">Upload client shipment data (CSV) to auto-generate consolidation, density, seasonality, and weighted average analytics</div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Upload Shipment CSV <span class="badge">Columns A–T</span></div>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:12px">
+          Required columns: shipment_date, origin_airport, destination_airport, service_tier, actual_weight_kg, volume_cbm, chargeable_weight_kg.
+          Optional: sell_rate_per_kg, buy_rate_per_kg, dg_status, packaging, etc.
+        </p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <input type="file" id="shipment-file" accept=".csv" style="font-size:13px;color:var(--text)">
+          <button class="btn btn-primary" onclick="uploadShipmentData()">Analyze Shipment Data</button>
+          <button class="btn" onclick="downloadShipmentTemplate()">Download Template CSV</button>
+        </div>
+        <div style="margin-top:12px">
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <div class="form-group" style="min-width:140px">
+              <label>Award Assumption %</label>
+              <input type="number" id="sd-award-pct" value="50" min="1" max="100">
+            </div>
+            <div class="form-group" style="min-width:140px">
+              <label>Analysis Period (weeks)</label>
+              <input type="number" id="sd-weeks" value="52" min="1">
+            </div>
+            <div class="form-group" style="min-width:140px">
+              <label>FTL Threshold (kg)</label>
+              <input type="number" id="sd-ftl" value="4000">
+            </div>
+          </div>
+        </div>
+        <div id="shipment-upload-status" style="margin-top:8px;font-size:13px;color:var(--muted)"></div>
+      </div>
+
+      <!-- Consolidation -->
+      <div id="sd-consolidation-section" style="display:none">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">Consolidation Assessment <span class="badge" id="sd-con-badge"></span></div>
+          <div id="sd-consolidation-table"></div>
+        </div>
+
+        <!-- Density -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">Density Distribution <span class="badge">per lane</span></div>
+          <p style="color:var(--muted);font-size:12px;margin-bottom:12px">
+            Dim ratio = actual weight / (CBM × 1000/6). 1:6 = neutral. Below 1:6 = light/bulky cargo (more expensive). Above 1:6 = dense/heavy (better airline rates).
+          </p>
+          <div id="sd-density-table"></div>
+          <div id="sd-density-overall" style="margin-top:12px"></div>
+        </div>
+
+        <!-- Seasonality -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">Seasonality Profile</div>
+          <div id="sd-seasonality-chart"></div>
+        </div>
+
+        <!-- Weighted Average -->
+        <div class="card">
+          <div class="card-title">Weight Break Distribution <span class="badge">by lane</span></div>
+          <p style="color:var(--muted);font-size:12px;margin-bottom:12px">
+            Shows concentration of shipments per weight bracket — use to identify which weight break rate is most important for each lane.
+          </p>
+          <div id="sd-weighted-avg-table"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Analysis -->
     <div id="page-analysis" class="page">
       <div class="page-title">Bid Analysis</div>
@@ -499,7 +569,7 @@
     <div style="margin-bottom:14px;font-size:12px;color:var(--yellow);text-transform:uppercase;letter-spacing:.5px">Origin Charges</div>
     <div class="form-grid" style="margin-bottom:16px">
       <div class="form-group"><label>Currency</label>
-        <select id="lane-origin_currency"><option>USD</option><option>EUR</option><option>CNY</option><option>HKD</option><option>GBP</option></select>
+        <select id="lane-origin_currency"><option>USD</option><option>CNY</option><option>EUR</option><option>GBP</option><option>HKD</option><option>JPY</option><option>SGD</option><option>MYR</option><option>IDR</option><option>THB</option><option>INR</option><option>TWD</option><option>KRW</option><option>AUD</option><option>CAD</option><option>AED</option><option>SAR</option><option>TRY</option><option>BRL</option><option>CHF</option><option>SEK</option><option>PLN</option></select>
       </div>
       <div class="form-group"><label>Pickup Min (flat fee)</label><input type="number" id="lane-pickup_min" step="0.01"></div>
       <div class="form-group"><label>Pickup per kg (+1000kg)</label><input type="number" id="lane-pickup_kg_1000" step="0.01"></div>
@@ -513,7 +583,7 @@
     <div style="margin-bottom:14px;font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px">Main Freight (Airport to Airport)</div>
     <div class="form-grid" style="margin-bottom:10px">
       <div class="form-group"><label>Currency</label>
-        <select id="lane-main_currency"><option>USD</option><option>EUR</option><option>CNY</option><option>HKD</option></select>
+        <select id="lane-main_currency"><option>USD</option><option>EUR</option><option>CNY</option><option>HKD</option><option>GBP</option><option>JPY</option><option>SGD</option><option>AUD</option></select>
       </div>
       <div class="form-group"><label>Airline / Carrier</label><input id="lane-airline" placeholder="e.g. CX, CA, EK"></div>
       <div class="form-group"><label>Routing</label><input id="lane-routing" placeholder="e.g. PVG-LAX direct"></div>
@@ -558,7 +628,7 @@
     <div style="margin-bottom:14px;font-size:12px;color:var(--green);text-transform:uppercase;letter-spacing:.5px">Destination Charges</div>
     <div class="form-grid" style="margin-bottom:20px">
       <div class="form-group"><label>Currency</label>
-        <select id="lane-dest_currency"><option>USD</option><option>EUR</option><option>GBP</option><option>AUD</option></select>
+        <select id="lane-dest_currency"><option>USD</option><option>EUR</option><option>GBP</option><option>AUD</option><option>CAD</option><option>JPY</option><option>SGD</option><option>HKD</option><option>CNY</option><option>MYR</option><option>IDR</option><option>THB</option><option>INR</option><option>AED</option><option>SAR</option><option>TRY</option><option>BRL</option><option>CHF</option><option>SEK</option><option>PLN</option></select>
       </div>
       <div class="form-group"><label>Delivery Min (flat fee)</label><input type="number" id="lane-delivery_min" step="0.01"></div>
       <div class="form-group"><label>Delivery per kg (+1000kg)</label><input type="number" id="lane-delivery_kg_1000" step="0.01"></div>
@@ -568,8 +638,22 @@
       <div class="form-group"><label>Doc Turnover (per HAWB)</label><input type="number" id="lane-doc_turnover" step="0.01"></div>
     </div>
 
+    <!-- Rate QA Panel -->
+    <div id="rate-qa-panel" style="display:none;margin-bottom:16px;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--surface2)">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Rate QA Validation</div>
+      <div id="rate-qa-results"></div>
+    </div>
+
+    <!-- Currency Auto-fill -->
+    <div style="margin-bottom:16px;padding:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Currency auto-populate based on country codes</div>
+      <button class="btn btn-sm" onclick="autofillCurrencies()">Auto-fill Currencies</button>
+      <span id="currency-autofill-msg" style="font-size:12px;color:var(--muted);margin-left:10px"></span>
+    </div>
+
     <div style="display:flex;justify-content:flex-end;gap:10px">
       <button class="btn" onclick="closeLaneModal()">Cancel</button>
+      <button class="btn btn-sm" onclick="runLaneQA()">Check Rates</button>
       <button class="btn btn-primary" onclick="saveLane()">Save Lane</button>
     </div>
   </div>
