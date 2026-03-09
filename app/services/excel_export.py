@@ -108,55 +108,140 @@ def _fill_kickoff(wb, bid_data: Dict[str, Any]):
             ws.cell(row=row, column=2).value = value
 
 
+def _fmt(val, suffix="") -> str:
+    """Format a numeric value or return dash."""
+    if val is None or val == "" or val == 0:
+        return "-"
+    try:
+        return f"{float(val):.3f}{suffix}"
+    except (TypeError, ValueError):
+        return str(val)
+
+
 def generate_customer_quote_html(bid_data: Dict[str, Any]) -> str:
-    """Generate a simple HTML customer-facing quote."""
+    """Generate a customer-facing HTML quote with all weight breaks per V7 format."""
     client_name = bid_data.get("client_name", "Client")
+    pr_id = bid_data.get("pricing_request_id", "")
     lanes = bid_data.get("lanes", [])
-    rows = ""
+
+    # Shipment info rows
+    shipment_rows = ""
+    rate_rows = ""
+
     for lane in lanes:
         origin = f"{lane.get('origin_city', '')} ({lane.get('origin_airport', '')})"
         dest = f"{lane.get('destination_city', '')} ({lane.get('destination_airport', '')})"
-        sell = lane.get("sell_rate_per_kg", "-")
-        fsc = lane.get("fuel_surcharge", "-")
-        ssc = lane.get("security_charge", "-")
-        ams = lane.get("ams_ens", "-")
-        transit = f"{lane.get('transit_min', '?')}-{lane.get('transit_max', '?')} days"
-        effective = lane.get("effective_date", "-")
-        expiration = lane.get("expiration_date", "-")
         tier = lane.get("service_tier", "-")
-        rows += f"""
+        dg = lane.get("dangerous_goods", "General Cargo") or "General Cargo"
+        stackable = lane.get("stackable", "-") or "-"
+        packaging = lane.get("packaging", "-") or "-"
+        incoterms = lane.get("incoterms", "-") or "-"
+        transit = f"{lane.get('transit_min', '?')}–{lane.get('transit_max', '?')} days"
+        effective = lane.get("effective_date", "-") or "-"
+        expiration = lane.get("expiration_date", "-") or "-"
+        port_pair = f"{lane.get('origin_airport', '?')} – {lane.get('destination_airport', '?')}"
+
+        shipment_rows += f"""
         <tr>
             <td>{lane.get('lane_id')}</td>
+            <td>{port_pair}</td>
             <td>{origin}</td>
             <td>{dest}</td>
-            <td>{tier}</td>
-            <td>{sell}</td>
-            <td>{fsc}</td>
-            <td>{ssc}</td>
-            <td>{ams}</td>
+            <td><strong>{tier}</strong></td>
+            <td>{dg}</td>
+            <td>{stackable}</td>
+            <td>{packaging}</td>
+            <td>{incoterms}</td>
             <td>{transit}</td>
             <td>{effective}</td>
             <td>{expiration}</td>
         </tr>"""
 
+        # All 7 weight breaks
+        s_min = _fmt(lane.get("sell_rate_min"))
+        s_45  = _fmt(lane.get("sell_rate_45"))
+        s_100 = _fmt(lane.get("sell_rate_100"))
+        s_300 = _fmt(lane.get("sell_rate_300"))
+        s_500 = _fmt(lane.get("sell_rate_500"))
+        s_1k  = _fmt(lane.get("sell_rate_per_kg"))
+        s_2k  = _fmt(lane.get("sell_rate_2000"))
+        fsc   = _fmt(lane.get("fuel_surcharge"))
+        ssc   = _fmt(lane.get("security_charge"))
+        ams   = _fmt(lane.get("ams_ens"))
+        pss   = _fmt(lane.get("pss"))
+        acas  = _fmt(lane.get("acas"))
+        ccy   = lane.get("main_currency") or "USD"
+
+        rate_rows += f"""
+        <tr>
+            <td>{lane.get('lane_id')}</td>
+            <td>{port_pair}</td>
+            <td><strong>{tier}</strong></td>
+            <td>{ccy}</td>
+            <td>{s_min}</td>
+            <td>{s_45}</td>
+            <td>{s_100}</td>
+            <td>{s_300}</td>
+            <td>{s_500}</td>
+            <td><strong style="color:#1a73e8">{s_1k}</strong></td>
+            <td>{s_2k}</td>
+            <td>{fsc}</td>
+            <td>{ssc}</td>
+            <td>{ams}</td>
+            <td>{pss}</td>
+            <td>{acas}</td>
+        </tr>"""
+
+    style = """
+    <style>
+      .quote-export { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a2e; max-width: 100%; }
+      .quote-export h2 { font-size: 18px; color: #1a1a2e; margin-bottom: 4px; }
+      .quote-meta { color: #666; font-size: 11px; margin-bottom: 16px; }
+      .quote-section-title { font-size: 13px; font-weight: 700; color: #1a73e8; margin: 18px 0 8px; border-bottom: 2px solid #1a73e8; padding-bottom: 4px; }
+      .quote-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+      .quote-table th { background: #1a1a2e; color: #fff; padding: 7px 10px; font-size: 11px; text-align: left; }
+      .quote-table td { padding: 6px 10px; border-bottom: 1px solid #e0e0e0; }
+      .quote-table tr:nth-child(even) td { background: #f8f9ff; }
+      .terms { font-size: 11px; color: #777; margin-top: 14px; line-height: 1.8; border-top: 1px solid #ddd; padding-top: 10px; }
+    </style>"""
+
     return f"""
+    {style}
     <div class="quote-export">
         <h2>Airfreight Quote — {client_name}</h2>
-        <p class="quote-meta">Generated: {datetime.now().strftime('%Y-%m-%d')} | Currency: USD</p>
+        <p class="quote-meta">Pricing Request: {pr_id} &nbsp;|&nbsp; Generated: {datetime.now().strftime('%Y-%m-%d')} &nbsp;|&nbsp; Flexport Air Freight</p>
+
+        <div class="quote-section-title">Shipment Information</div>
         <table class="quote-table">
             <thead>
                 <tr>
-                    <th>#</th><th>Origin</th><th>Destination</th><th>Service</th>
-                    <th>Rate/kg</th><th>FSC</th><th>SSC</th><th>AMS/ENS</th>
+                    <th>#</th><th>Port Pair</th><th>Origin</th><th>Destination</th><th>Service</th>
+                    <th>DG Status</th><th>Stackable</th><th>Packaging</th><th>Incoterms</th>
                     <th>Transit</th><th>Valid From</th><th>Valid To</th>
                 </tr>
             </thead>
-            <tbody>{rows}</tbody>
+            <tbody>{shipment_rows}</tbody>
         </table>
+
+        <div class="quote-section-title">Airfreight Rates (per kg, by weight break)</div>
+        <table class="quote-table">
+            <thead>
+                <tr>
+                    <th>#</th><th>Port Pair</th><th>Service</th><th>CCY</th>
+                    <th>Min</th><th>+45kg</th><th>+100kg</th><th>+300kg</th><th>+500kg</th>
+                    <th>+1000kg</th><th>+2000kg</th>
+                    <th>FSC/kg</th><th>SSC/kg</th><th>AMS/ENS</th><th>PSS/kg</th><th>ACAS</th>
+                </tr>
+            </thead>
+            <tbody>{rate_rows}</tbody>
+        </table>
+
         <div class="terms">
-            <p>* All rates are based on USD. Flexport reserves the right to apply a Currency Adjustment Factor (CAF).</p>
+            <p>* All rates are in the currency shown. Flexport reserves the right to apply a Currency Adjustment Factor (CAF).</p>
             <p>* Offer is valid for acceptance maximum 7 days after submission date.</p>
-            <p>* Chargeable weight based on actual vs volumetric (1:6 ratio), whichever is greater.</p>
+            <p>* Chargeable weight = MAX(actual weight, volumetric weight). Volumetric = CBM × 166.67 (1:6 ratio).</p>
+            <p>* PSS (Peak Season Surcharge) applicable Sep–Dec unless otherwise stated.</p>
+            <p>* AMS applicable on US-inbound lanes only. ENS applicable on EU-inbound lanes only.</p>
         </div>
     </div>
     """

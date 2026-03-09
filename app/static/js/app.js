@@ -81,18 +81,28 @@ async function calculateScore() {
 function updateScoreDisplay(score, rec) {
   const el = document.getElementById('score-result');
   if (!el) return;
-  const cls = score >= 70 ? 'high' : score >= 45 ? 'mid' : 'low';
+  const cls = score >= 80 ? 'high' : score >= 60 ? 'mid' : 'low';
+  const tier = score >= 80 ? 'Ideal — High Win Probability'
+    : score >= 60 ? 'Good Probability — Build Strategy'
+    : score >= 45 ? 'Low Probability — Deprioritize'
+    : 'Very Low — Not Recommended';
   el.innerHTML = `
     <div class="score-ring">
       <div class="score-circle ${cls}">${score}</div>
-      <div class="score-meta"><strong>${score >= 70 ? 'Strong Bid' : score >= 45 ? 'Moderate Bid' : 'Weak Bid'}</strong>${rec}</div>
+      <div class="score-meta"><strong>${tier}</strong>${rec}</div>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap">
+      <span style="padding:3px 8px;border-radius:4px;background:rgba(46,204,113,.15);color:var(--green)">80+ Ideal</span>
+      <span style="padding:3px 8px;border-radius:4px;background:rgba(243,156,18,.15);color:var(--yellow)">60–79 Good</span>
+      <span style="padding:3px 8px;border-radius:4px;background:rgba(231,76,60,.15);color:var(--red)">45–59 Low</span>
+      <span style="padding:3px 8px;border-radius:4px;background:rgba(136,146,170,.15);color:var(--muted)">0–44 Very Low</span>
     </div>`;
   // Update sidebar
   const sidebar = document.getElementById('sidebar-score');
   if (sidebar) {
     sidebar.innerHTML = `<div class="score-ring">
       <div class="score-circle ${cls}">${score}</div>
-      <div class="score-meta"><strong>${score >= 70 ? 'Strong' : score >= 45 ? 'Moderate' : 'Weak'}</strong>${rec.substring(0, 60)}...</div>
+      <div class="score-meta"><strong>${tier}</strong><span style="display:block;margin-top:3px">${rec.substring(0, 55)}...</span></div>
     </div>`;
   }
 }
@@ -130,16 +140,22 @@ function renderLanesTable() {
     const origin = `${lane.origin_city || ''} (${lane.origin_airport || '-'})`;
     const dest = `${lane.destination_city || ''} (${lane.destination_airport || '-'})`;
     const tierClass = { STD: 'tag-std', EXP: 'tag-exp', DEF: 'tag-def' }[lane.service_tier] || 'tag-std';
+    const awardStatus = lane.award_status === '1' ? '<span style="color:var(--green);font-weight:700">Awarded</span>'
+      : lane.award_status === '0' ? '<span style="color:var(--red)">Lost</span>'
+      : '<span style="color:var(--muted)">Pending</span>';
+    const roundLabel = lane.round ? `R${lane.round}` : 'R1';
     return `<tr>
       <td>${lane.lane_id}</td>
       <td>${origin}</td>
       <td>${dest}</td>
       <td><span class="tag ${tierClass}">${lane.service_tier || 'STD'}</span></td>
+      <td style="color:var(--muted)">${roundLabel}</td>
       <td>${lane.chargeable_weight_kg?.toLocaleString() || '-'} kg</td>
       <td>$${lane.sell_rate_per_kg || '-'}/kg</td>
       <td>$${fin.cost_per_kg || '-'}/kg</td>
       <td style="color:var(--green)">$${fin.nr_per_shipment?.toFixed(0) || '-'}</td>
       <td style="color:var(--muted)">${fin.take_rate_pct || '-'}%</td>
+      <td>${awardStatus}</td>
       <td>
         <button class="btn btn-sm" onclick="editLane(${i})">Edit</button>
         <button class="btn btn-sm" style="margin-left:4px" onclick="deleteLane(${i})">✕</button>
@@ -155,6 +171,7 @@ function updateFinancialSummary() {
   const totalNR = fins.reduce((s, f) => s + (f.total_net_revenue || 0), 0);
   const avgTake = fins.reduce((s, f) => s + (f.take_rate_pct || 0), 0) / fins.length;
   const totalCW = state.lanes.reduce((s, l) => s + (l.chargeable_weight_kg || 0), 0);
+  const awarded = state.lanes.filter(l => l.award_status === '1').length;
 
   setEl('fin-total-nr', `$${(totalNR/1000).toFixed(1)}K`);
   setEl('fin-avg-take', `${avgTake.toFixed(1)}%`);
@@ -165,6 +182,7 @@ function updateFinancialSummary() {
   setEl('fin-avg-take2', `${avgTake.toFixed(1)}%`);
   setEl('fin-total-cw2', `${totalCW.toLocaleString()} kg`);
   setEl('fin-lanes2', state.lanes.length);
+  setEl('fin-awarded2', awarded);
 }
 
 function setEl(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
@@ -179,7 +197,8 @@ function openLaneModal(index = null) {
 
   const allFields = ['origin_country','origin_city','origin_airport','destination_country','destination_city',
     'destination_airport','service_tier','chargeable_weight_kg','total_shipments','avg_shipment_kg',
-    'effective_date','expiration_date','incoterms',
+    'effective_date','expiration_date','incoterms','round',
+    'dangerous_goods','stackable','packaging','award_status',
     'origin_currency','pickup_min','pickup_kg_100','pickup_kg_500','pickup_kg_1000','pickup_kg_2000',
     'origin_thc','screening','doc_fee','export_customs',
     'main_currency',
@@ -188,7 +207,10 @@ function openLaneModal(index = null) {
     'fuel_surcharge','security_charge','ams_ens','acas','pss','pss_effective','pss_expiration',
     'air_base_markup','airline','routing','flights_per_week','transit_min','transit_max',
     'dest_currency','delivery_min','delivery_kg_100','delivery_kg_500','delivery_kg_1000','delivery_kg_2000',
-    'dest_thc','import_service','import_customs','doc_turnover'];
+    'dest_thc','import_service','import_customs','doc_turnover',
+    'extra_charge_1_name','extra_charge_1_amount','extra_charge_2_name','extra_charge_2_amount',
+    'margin_recommendation','tonnage_cap',
+    'bundled_lane','carrier_partner','procurement_notes','round_feedback','assumptions'];
 
   allFields.forEach(f => {
     const el = document.getElementById('lane-' + f);
@@ -213,7 +235,8 @@ function closeLaneModal() {
 async function saveLane() {
   const fields = ['origin_country','origin_city','origin_airport','destination_country','destination_city',
     'destination_airport','service_tier','chargeable_weight_kg','total_shipments','avg_shipment_kg',
-    'effective_date','expiration_date','incoterms',
+    'effective_date','expiration_date','incoterms','round',
+    'dangerous_goods','stackable','packaging','award_status',
     'origin_currency','pickup_min','pickup_kg_100','pickup_kg_500','pickup_kg_1000','pickup_kg_2000',
     'origin_thc','screening','doc_fee','export_customs',
     'main_currency',
@@ -222,7 +245,10 @@ async function saveLane() {
     'fuel_surcharge','security_charge','ams_ens','acas','pss','pss_effective','pss_expiration',
     'air_base_markup','airline','routing','flights_per_week','transit_min','transit_max',
     'dest_currency','delivery_min','delivery_kg_100','delivery_kg_500','delivery_kg_1000','delivery_kg_2000',
-    'dest_thc','import_service','import_customs','doc_turnover'];
+    'dest_thc','import_service','import_customs','doc_turnover',
+    'extra_charge_1_name','extra_charge_1_amount','extra_charge_2_name','extra_charge_2_amount',
+    'margin_recommendation','tonnage_cap',
+    'bundled_lane','carrier_partner','procurement_notes','round_feedback','assumptions'];
 
   const numericFields = new Set(['chargeable_weight_kg','total_shipments','avg_shipment_kg',
     'pickup_min','pickup_kg_100','pickup_kg_500','pickup_kg_1000','pickup_kg_2000',
@@ -231,7 +257,8 @@ async function saveLane() {
     'sell_rate_min','sell_rate_45','sell_rate_100','sell_rate_300','sell_rate_500','sell_rate_per_kg','sell_rate_2000',
     'fuel_surcharge','security_charge','ams_ens','acas','pss','air_base_markup','flights_per_week',
     'delivery_min','delivery_kg_100','delivery_kg_500','delivery_kg_1000','delivery_kg_2000',
-    'dest_thc','import_service','import_customs','doc_turnover','transit_min','transit_max']);
+    'dest_thc','import_service','import_customs','doc_turnover','transit_min','transit_max',
+    'extra_charge_1_amount','extra_charge_2_amount','margin_recommendation','tonnage_cap']);
 
   const lane = {};
   fields.forEach(f => {

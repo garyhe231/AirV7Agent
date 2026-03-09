@@ -162,13 +162,13 @@ def calculate_bid_score(inputs: Dict[str, str]) -> Tuple[float, str]:
     final_score = weighted_score / total_weight
 
     if final_score >= 80:
-        recommendation = "Strong bid — high probability of win. Invest fully."
+        recommendation = "Ideal customer — high probability of win. Invest fully."
     elif final_score >= 60:
-        recommendation = "Good probability to win, need to form solid winning strategy."
-    elif final_score >= 40:
-        recommendation = "Moderate opportunity — proceed with caution, focus on differentiators."
+        recommendation = "Good probability to win. Form a solid winning strategy."
+    elif final_score >= 45:
+        recommendation = "Low probability to win. Deprioritize vs other opportunities."
     else:
-        recommendation = "Low probability bid — consider whether to participate."
+        recommendation = "Very low probability to win. Not recommended to bid."
 
     return round(final_score, 1), recommendation
 

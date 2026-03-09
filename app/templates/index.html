@@ -213,7 +213,7 @@
       <div class="page-title">Lanes & Pricing</div>
       <div class="page-subtitle">Add trade lanes with full origin, main freight, and destination charges</div>
 
-      <div class="fin-grid">
+      <div class="fin-grid" style="grid-template-columns:repeat(5,1fr)">
         <div class="fin-card">
           <div class="fin-label">Total Net Revenue</div>
           <div class="fin-value green" id="fin-total-nr2">—</div>
@@ -230,6 +230,10 @@
           <div class="fin-label">Active Lanes</div>
           <div class="fin-value" id="fin-lanes2">0</div>
         </div>
+        <div class="fin-card">
+          <div class="fin-label">Awarded Lanes</div>
+          <div class="fin-value green" id="fin-awarded2">0</div>
+        </div>
       </div>
 
       <div class="card">
@@ -241,7 +245,7 @@
           <thead>
             <tr>
               <th>#</th><th>Origin</th><th>Destination</th><th>Service</th>
-              <th>CW (kg)</th><th>Sell/kg</th><th>Cost/kg</th><th>NR/Shipment</th><th>Take Rate</th><th>Actions</th>
+              <th>Round</th><th>CW (kg)</th><th>Sell/kg</th><th>Cost/kg</th><th>NR/Shipment</th><th>Take Rate</th><th>Award</th><th>Actions</th>
             </tr>
           </thead>
           <tbody id="lanes-tbody"></tbody>
@@ -252,7 +256,7 @@
     <!-- Volume -->
     <div id="page-volume" class="page">
       <div class="page-title">Volume & Consolidation Analysis</div>
-      <div class="page-subtitle">Weekly volume, award assumptions, consolidation, seasonality, weighted average rates</div>
+      <div class="page-subtitle">Analysis from lane-level data (uses lanes entered in Lanes & Pricing tab). For shipment-level CSV upload, use the Shipment Data tab.</div>
 
       <!-- Award settings -->
       <div class="card" style="margin-bottom:16px">
@@ -562,7 +566,33 @@
       <div class="form-group"><label>Total Shipments / Year</label><input type="number" id="lane-total_shipments"></div>
       <div class="form-group"><label>Chargeable Weight (kg/year)</label><input type="number" id="lane-chargeable_weight_kg"></div>
       <div class="form-group"><label>Avg Shipment Size (kg)</label><input type="number" id="lane-avg_shipment_kg"></div>
-      <div class="form-group"><!-- spacer --></div>
+      <div class="form-group"><label>Bid Round</label>
+        <select id="lane-round"><option value="1">Round 1</option><option value="2">Round 2</option><option value="3">Round 3</option><option value="4">Round 4+</option></select>
+      </div>
+      <div class="form-group"><label>DG Status</label>
+        <select id="lane-dangerous_goods">
+          <option value="">General Cargo</option>
+          <option>Lithium Batteries</option>
+          <option>Class 1 — Explosives</option>
+          <option>Class 2 — Gases</option>
+          <option>Class 3 — Flammable Liquids</option>
+          <option>Class 4 — Flammable Solids</option>
+          <option>Class 5 — Oxidizers</option>
+          <option>Class 6 — Toxic</option>
+          <option>Class 7 — Radioactive</option>
+          <option>Class 8 — Corrosives</option>
+          <option>Class 9 — Misc DG</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Stackable</label>
+        <select id="lane-stackable"><option value="">— Select —</option><option>Yes</option><option>No</option></select>
+      </div>
+      <div class="form-group"><label>Packaging</label>
+        <select id="lane-packaging"><option value="">— Select —</option><option>Loose</option><option>Palletized</option></select>
+      </div>
+      <div class="form-group"><label>Award Status</label>
+        <select id="lane-award_status"><option value="">Pending</option><option value="1">Awarded</option><option value="0">Lost</option></select>
+      </div>
     </div>
 
     <!-- Origin Charges -->
@@ -636,6 +666,35 @@
       <div class="form-group"><label>Import Service Charge</label><input type="number" id="lane-import_service" step="0.01"></div>
       <div class="form-group"><label>Import Customs (per HAWB)</label><input type="number" id="lane-import_customs" step="0.01"></div>
       <div class="form-group"><label>Doc Turnover (per HAWB)</label><input type="number" id="lane-doc_turnover" step="0.01"></div>
+    </div>
+
+    <!-- Non-Standard / Extra Charges -->
+    <div style="margin-bottom:14px;font-size:12px;color:var(--accent2);text-transform:uppercase;letter-spacing:.5px">Extra / Non-Standard Charges</div>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-group"><label>Extra Charge 1 — Name</label><input id="lane-extra_charge_1_name" placeholder="e.g. Oversize surcharge"></div>
+      <div class="form-group"><label>Extra Charge 1 — Amount</label><input type="number" id="lane-extra_charge_1_amount" step="0.01"></div>
+      <div class="form-group"><label>Extra Charge 2 — Name</label><input id="lane-extra_charge_2_name" placeholder="e.g. Minimum charge override"></div>
+      <div class="form-group"><label>Extra Charge 2 — Amount</label><input type="number" id="lane-extra_charge_2_amount" step="0.01"></div>
+      <div class="form-group"><label>Margin Recommendation ($/kg)</label><input type="number" id="lane-margin_recommendation" step="0.001" placeholder="Enter 0 if not applicable"></div>
+      <div class="form-group"><label>Tonnage Cap (kg/week)</label><input type="number" id="lane-tonnage_cap" step="1"></div>
+    </div>
+
+    <!-- Lane Analysis / Procurement Notes -->
+    <div style="margin-bottom:14px;font-size:12px;color:var(--green);text-transform:uppercase;letter-spacing:.5px">Lane Analysis & Procurement Notes</div>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-group"><label>Bundled Lane?</label>
+        <select id="lane-bundled_lane"><option value="">No</option><option value="Yes">Yes</option></select>
+      </div>
+      <div class="form-group"><label>Carrier Partner</label><input id="lane-carrier_partner" placeholder="e.g. CX, EK, CA..."></div>
+      <div class="form-group full"><label>Procurement Strategy Notes</label>
+        <textarea id="lane-procurement_notes" placeholder="e.g. Lock in FTL rate. CX has priority. Waiting for Round 2 feedback."></textarea>
+      </div>
+      <div class="form-group full"><label>Round-over-Round Feedback</label>
+        <textarea id="lane-round_feedback" placeholder="e.g. R1: We were $0.20 above incumbent. Client requested reduction on +500kg break."></textarea>
+      </div>
+      <div class="form-group full"><label>Assumptions</label>
+        <textarea id="lane-assumptions" placeholder="e.g. 50% award assumed. Density 1:6. No PSS cap."></textarea>
+      </div>
     </div>
 
     <!-- Rate QA Panel -->
