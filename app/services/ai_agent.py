@@ -58,6 +58,8 @@ When analyzing bids, always consider:
 
 Be concise, practical, and numbers-focused. When the user provides lane or volume data, extract it and compute financials. Always surface the most important commercial insight first.
 
+IMPORTANT: Always complete your full response. Never cut off mid-sentence, mid-table, or mid-section. If a response would be very long, summarize sections rather than leaving them incomplete.
+
 Current bid data will be provided in context when available.
 """
 
@@ -93,7 +95,7 @@ def chat(messages: List[Dict[str, str]], bid_data: Optional[Dict[str, Any]] = No
     if context:
         system += f"\n\n{context}"
 
-    return _invoke(system, messages, max_tokens=2048)
+    return _invoke(system, messages, max_tokens=8096)
 
 
 def analyze_bid(bid_data: Dict[str, Any]) -> str:
@@ -110,7 +112,7 @@ Structure your response as:
 5. **Recommended Pricing Strategy** — how aggressive to be, key levers
 6. **Open Questions / Risks** — what's missing or concerning
 """
-    return _invoke(SYSTEM_PROMPT, [{"role": "user", "content": prompt}], max_tokens=2048)
+    return _invoke(SYSTEM_PROMPT, [{"role": "user", "content": prompt}], max_tokens=8096)
 
 
 def suggest_rates(lane_data: Dict[str, Any], market_context: str = "") -> str:
@@ -130,4 +132,4 @@ Provide:
 
 Be specific with numbers and explain your reasoning briefly.
 """
-    return _invoke(SYSTEM_PROMPT, [{"role": "user", "content": prompt}], max_tokens=1024)
+    return _invoke(SYSTEM_PROMPT, [{"role": "user", "content": prompt}], max_tokens=4096)
