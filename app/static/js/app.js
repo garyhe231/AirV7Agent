@@ -383,14 +383,44 @@ async function sendChat() {
 
   document.getElementById('send-btn').disabled = true;
   try {
-    const res = await fetch('/api/chat', {
+    const res = await fetch('/api/chat/stream', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: state.chatHistory, bid_data: getBidContext() }),
     });
-    const data = await res.json();
     typing.remove();
-    state.chatHistory.push({ role: 'assistant', content: data.reply });
-    renderMessage('ai', data.reply);
+
+    const msgs = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'msg ai';
+    div.innerHTML = '<div class="msg-avatar">AI</div><div class="msg-bubble"></div>';
+    msgs.appendChild(div);
+    const bubble = div.querySelector('.msg-bubble');
+
+    let fullText = '';
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (raw === '[DONE]') break;
+        try {
+          const parsed = JSON.parse(raw);
+          fullText += parsed.text || '';
+          bubble.innerHTML = marked(fullText);
+          msgs.scrollTop = msgs.scrollHeight;
+        } catch {}
+      }
+    }
+
+    state.chatHistory.push({ role: 'assistant', content: fullText });
   } catch (e) {
     typing.remove();
     renderMessage('ai', 'Error connecting to agent. Please try again.');

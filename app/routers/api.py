@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from typing import Dict, Any, Optional, List
 import json
 import os
@@ -7,7 +7,7 @@ import tempfile
 from datetime import datetime
 
 from app.models import ChatRequest, BidData, BidScoreInput, Lane
-from app.services.ai_agent import chat, analyze_bid, suggest_rates
+from app.services.ai_agent import chat, chat_stream, analyze_bid, suggest_rates
 from app.services.scoring import calculate_bid_score, compute_lane_financials, SCORE_OPTIONS
 from app.services.excel_export import export_to_v7, generate_customer_quote_html
 from app.services.fx import convert_to_usd, convert, get_all_rates, get_supported_currencies
@@ -26,6 +26,18 @@ async def chat_endpoint(req: ChatRequest):
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
     reply = chat(messages, req.bid_data)
     return {"reply": reply}
+
+
+@router.post("/chat/stream")
+async def chat_stream_endpoint(req: ChatRequest):
+    messages = [{"role": m.role, "content": m.content} for m in req.messages]
+
+    def generate():
+        for chunk in chat_stream(messages, req.bid_data):
+            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.post("/score")

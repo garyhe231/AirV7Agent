@@ -1,6 +1,6 @@
 import json
 import boto3
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Generator
 
 BEDROCK_MODEL = "arn:aws:bedrock:us-east-1:013986332596:application-inference-profile/gdsg22td462g"
 REGION = "us-east-1"
@@ -113,6 +113,32 @@ Structure your response as:
 6. **Open Questions / Risks** — what's missing or concerning
 """
     return _invoke(SYSTEM_PROMPT, [{"role": "user", "content": prompt}], max_tokens=8096)
+
+
+def chat_stream(messages: List[Dict[str, str]], bid_data: Optional[Dict[str, Any]] = None) -> Generator[str, None, None]:
+    context = build_context_block(bid_data)
+    system = SYSTEM_PROMPT
+    if context:
+        system += f"\n\n{context}"
+
+    body = {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 8096,
+        "system": system,
+        "messages": messages,
+    }
+    response = bedrock.invoke_model_with_response_stream(
+        modelId=BEDROCK_MODEL,
+        body=json.dumps(body),
+        contentType="application/json",
+        accept="application/json",
+    )
+    for event in response["body"]:
+        chunk = json.loads(event["chunk"]["bytes"])
+        if chunk.get("type") == "content_block_delta":
+            delta = chunk.get("delta", {})
+            if delta.get("type") == "text_delta":
+                yield delta.get("text", "")
 
 
 def suggest_rates(lane_data: Dict[str, Any], market_context: str = "") -> str:
