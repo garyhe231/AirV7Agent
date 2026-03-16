@@ -7,7 +7,7 @@ import tempfile
 from datetime import datetime
 
 from app.models import ChatRequest, BidData, BidScoreInput, Lane
-from app.services.ai_agent import chat, chat_stream, analyze_bid, analyze_bid_stream, suggest_rates
+from app.services.ai_agent import chat, chat_stream, analyze_bid, analyze_bid_stream, suggest_rates, suggest_rates_stream
 from app.services.scoring import calculate_bid_score, compute_lane_financials, SCORE_OPTIONS
 from app.services.excel_export import export_to_v7, generate_customer_quote_html
 from app.services.fx import convert_to_usd, convert, get_all_rates, get_supported_currencies
@@ -63,6 +63,19 @@ async def suggest_lane_rates(payload: Dict[str, Any]):
     market_context = payload.get("market_context", "")
     suggestion = suggest_rates(lane_data, market_context)
     return {"suggestion": suggestion}
+
+
+@router.post("/lanes/suggest-rates/stream")
+async def suggest_lane_rates_stream(payload: Dict[str, Any]):
+    lane_data = payload.get("lane", {})
+    market_context = payload.get("market_context", "")
+
+    def generate():
+        for chunk in suggest_rates_stream(lane_data, market_context):
+            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.post("/analyze")

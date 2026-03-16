@@ -193,3 +193,40 @@ Provide:
 Be specific with numbers and explain your reasoning briefly.
 """
     return _invoke(SYSTEM_PROMPT, [{"role": "user", "content": prompt}], max_tokens=4096)
+
+
+def suggest_rates_stream(lane_data: Dict[str, Any], market_context: str = "") -> Generator[str, None, None]:
+    """Stream AI suggested rates for a lane."""
+    prompt = f"""Based on this lane data, suggest competitive buy and sell rates:
+
+Lane: {json.dumps(lane_data, indent=2, default=str)}
+
+Market context: {market_context or 'Standard market conditions'}
+
+Provide:
+1. Suggested buy rate per kg (airport-to-airport, +1000kg)
+2. Suggested sell rate per kg
+3. Recommended markup %
+4. Any surcharge considerations
+5. Transit time expectation
+
+Be specific with numbers and explain your reasoning briefly.
+"""
+    body = {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 4096,
+        "system": SYSTEM_PROMPT,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    response = bedrock.invoke_model_with_response_stream(
+        modelId=BEDROCK_MODEL,
+        body=json.dumps(body),
+        contentType="application/json",
+        accept="application/json",
+    )
+    for event in response["body"]:
+        chunk = json.loads(event["chunk"]["bytes"])
+        if chunk.get("type") == "content_block_delta":
+            delta = chunk.get("delta", {})
+            if delta.get("type") == "text_delta":
+                yield delta.get("text", "")

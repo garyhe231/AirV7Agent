@@ -309,14 +309,37 @@ async function suggestRates() {
   });
   const btn = document.getElementById('suggest-btn');
   btn.textContent = 'Thinking...'; btn.disabled = true;
+  const suggBox = document.getElementById('rate-suggestion');
+  suggBox.innerHTML = '<div class="density-result"><pre style="white-space:pre-wrap;font-size:12px;font-family:inherit"></pre></div>';
+  const pre = suggBox.querySelector('pre');
   try {
-    const res = await fetch('/api/lanes/suggest-rates', {
+    const res = await fetch('/api/lanes/suggest-rates/stream', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lane }),
     });
-    const data = await res.json();
-    document.getElementById('rate-suggestion').innerHTML =
-      `<div class="density-result"><pre style="white-space:pre-wrap;font-size:12px;font-family:inherit">${data.suggestion}</pre></div>`;
+
+    let fullText = '';
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (raw === '[DONE]') break;
+        try {
+          const parsed = JSON.parse(raw);
+          fullText += parsed.text || '';
+          pre.textContent = fullText;
+        } catch {}
+      }
+    }
   } finally {
     btn.textContent = '✨ AI Suggest Rates'; btn.disabled = false;
   }
