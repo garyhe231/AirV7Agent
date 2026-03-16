@@ -458,14 +458,37 @@ async function calcDensity() {
 async function runAnalysis() {
   const btn = document.getElementById('analyze-btn');
   btn.textContent = 'Analyzing...'; btn.disabled = true;
+  const resultBox = document.getElementById('analysis-result');
+  resultBox.innerHTML = '<div class="msg-bubble" style="background:var(--surface2)"></div>';
+  const bubble = resultBox.querySelector('.msg-bubble');
   try {
-    const res = await fetch('/api/analyze', {
+    const res = await fetch('/api/analyze/stream', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(getBidContext()),
     });
-    const data = await res.json();
-    document.getElementById('analysis-result').innerHTML =
-      `<div class="msg-bubble" style="background:var(--surface2)">${marked(data.analysis)}</div>`;
+
+    let fullText = '';
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (raw === '[DONE]') break;
+        try {
+          const parsed = JSON.parse(raw);
+          fullText += parsed.text || '';
+          bubble.innerHTML = marked(fullText);
+        } catch {}
+      }
+    }
   } finally {
     btn.textContent = '🔍 Run Full Bid Analysis'; btn.disabled = false;
   }

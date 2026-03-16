@@ -7,7 +7,7 @@ import tempfile
 from datetime import datetime
 
 from app.models import ChatRequest, BidData, BidScoreInput, Lane
-from app.services.ai_agent import chat, chat_stream, analyze_bid, suggest_rates
+from app.services.ai_agent import chat, chat_stream, analyze_bid, analyze_bid_stream, suggest_rates
 from app.services.scoring import calculate_bid_score, compute_lane_financials, SCORE_OPTIONS
 from app.services.excel_export import export_to_v7, generate_customer_quote_html
 from app.services.fx import convert_to_usd, convert, get_all_rates, get_supported_currencies
@@ -69,6 +69,16 @@ async def suggest_lane_rates(payload: Dict[str, Any]):
 async def analyze(bid_data: Dict[str, Any]):
     analysis = analyze_bid(bid_data)
     return {"analysis": analysis}
+
+
+@router.post("/analyze/stream")
+async def analyze_stream(bid_data: Dict[str, Any]):
+    def generate():
+        for chunk in analyze_bid_stream(bid_data):
+            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.post("/export/excel")

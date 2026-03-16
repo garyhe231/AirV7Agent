@@ -115,6 +115,40 @@ Structure your response as:
     return _invoke(SYSTEM_PROMPT, [{"role": "user", "content": prompt}], max_tokens=8096)
 
 
+def analyze_bid_stream(bid_data: Dict[str, Any]) -> Generator[str, None, None]:
+    """Stream a full bid analysis summary."""
+    prompt = f"""Please provide a comprehensive bid analysis summary for this opportunity:
+
+{json.dumps(bid_data, indent=2, default=str)}
+
+Structure your response as:
+1. **Opportunity Overview** — client, scope, key commercial context
+2. **Bid Score Assessment** — win probability and key factors
+3. **Lane Analysis** — coverage, density, consolidation potential
+4. **Financial Summary** — total net revenue, take rates, any red flags
+5. **Recommended Pricing Strategy** — how aggressive to be, key levers
+6. **Open Questions / Risks** — what's missing or concerning
+"""
+    body = {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 8096,
+        "system": SYSTEM_PROMPT,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    response = bedrock.invoke_model_with_response_stream(
+        modelId=BEDROCK_MODEL,
+        body=json.dumps(body),
+        contentType="application/json",
+        accept="application/json",
+    )
+    for event in response["body"]:
+        chunk = json.loads(event["chunk"]["bytes"])
+        if chunk.get("type") == "content_block_delta":
+            delta = chunk.get("delta", {})
+            if delta.get("type") == "text_delta":
+                yield delta.get("text", "")
+
+
 def chat_stream(messages: List[Dict[str, str]], bid_data: Optional[Dict[str, Any]] = None) -> Generator[str, None, None]:
     context = build_context_block(bid_data)
     system = SYSTEM_PROMPT
