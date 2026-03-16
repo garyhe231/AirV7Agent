@@ -735,17 +735,40 @@ async function askAIOnKickoff() {
   if (!filled) { alert('Fill in some kickoff answers first.'); return; }
   const btn = document.querySelector('[onclick="askAIOnKickoff()"]');
   btn.textContent = 'Thinking...'; btn.disabled = true;
+  const adviceBox = document.getElementById('kickoff-ai-advice');
+  adviceBox.innerHTML = '<div class="msg-bubble" style="background:var(--surface2)"></div>';
+  const bubble = adviceBox.querySelector('.msg-bubble');
   try {
-    const res = await fetch('/api/chat', {
+    const res = await fetch('/api/chat/stream', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messages: [{ role: 'user', content: `Based on these kickoff answers, give me a pricing strategy recommendation and flag any risks:\n\n${filled}` }],
         bid_data: getBidContext(),
       }),
     });
-    const data = await res.json();
-    document.getElementById('kickoff-ai-advice').innerHTML =
-      `<div class="msg-bubble" style="background:var(--surface2)">${marked(data.reply)}</div>`;
+
+    let fullText = '';
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (raw === '[DONE]') break;
+        try {
+          const parsed = JSON.parse(raw);
+          fullText += parsed.text || '';
+          bubble.innerHTML = marked(fullText);
+        } catch {}
+      }
+    }
   } finally {
     btn.textContent = '✨ Get AI Strategy Advice'; btn.disabled = false;
   }
